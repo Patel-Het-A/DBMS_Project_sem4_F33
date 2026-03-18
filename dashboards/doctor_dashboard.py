@@ -1,5 +1,8 @@
 # dashboards/doctor_dashboard.py
 import streamlit as st
+import sys, os
+sys.path.append(os.path.abspath("src/modules/module-33/frontend"))
+from main import module33_app
 from components.sidebar import sidebar
 from components.charts import patient_line_chart, appointment_donut_chart
 import matplotlib.pyplot as plt
@@ -12,6 +15,7 @@ CATEGORIES = {
         "icon": "🏥",
         "stats": {"modules": "6", "records": "45,230", "alerts": "12"},
         "modules": [
+            ("F33", "Disease Progression Case Repository", "Track disease stages and progression", 4, 5000),
             ("A1", "Patient Demographics & Visit History", "Patient demographics and admission data", 5, 12500),
             ("A2", "Chronic Disease Patient Record", "Past medical records and conditions", 4, 8900),
             ("A3", "Pediatric Patient Clinical Data", "ICD codes and diagnosis tracking", 3, 15600),
@@ -87,6 +91,7 @@ CATEGORIES = {
             ("F5", "Training & Certification", "Credential tracking", 4, 940)
         ]
     },
+     
     "G - Compliance & Security": {
         "title": "Compliance & Security",
         "description": "Regulatory compliance, auditing, and data security",
@@ -99,6 +104,7 @@ CATEGORIES = {
             ("G4", "Patient Consent & Privacy", "Privacy management", 5, 18700)
         ]
     },
+   
     "H - Supply Chain": {
         "title": "Supply Chain & Inventory",
         "description": "Medical supplies, equipment, and vendor management",
@@ -353,6 +359,7 @@ def show_category_view():
 
 def show_module_detail():
     code, name, desc, tables, records = st.session_state.selected_module
+    
     cat_key = st.session_state.selected_category
     
     # Breadcrumb
@@ -361,6 +368,36 @@ def show_module_detail():
     st.markdown(f"*{desc}*")
     
     # Tabs
+    if code == "F33":
+        tab = st.radio(
+            "",
+            ["🏠 Dashboard", "👤 Patients", "📈 Progression", "🔍 Case Detail", "🧠 SQL & Triggers"],
+            horizontal=True
+        )
+
+        st.divider()
+
+        if tab == "🏠 Dashboard":
+            from dashboard import show_dashboard
+            show_dashboard()
+
+        elif tab == "👤 Patients":
+            from patient_list import show_patient_list
+            show_patient_list()
+
+        elif tab == "📈 Progression":
+            from progression import show_progression
+            show_progression()
+
+        elif tab == "🔍 Case Detail":
+            from case_detail import show_case_detail
+            show_case_detail()
+
+        elif tab == "🧠 SQL & Triggers":
+            from sql_view import show_sql_view
+            show_sql_view()
+
+        return
     tab = st.radio("", ["🏠 Home", "🔗 ER Diagram", "📋 Tables", "🔍 SQL Query", "⚡ Triggers", "📊 Output"], horizontal=True)
     st.divider()
     

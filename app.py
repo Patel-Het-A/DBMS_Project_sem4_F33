@@ -1,4 +1,8 @@
 import streamlit as st
+import sys
+import os
+sys.path.append(os.path.abspath("src/modules/module-33/frontend"))
+from main import module33_app
 from auth.login import login_page
 from auth.signup import signup_page
 from dashboards.patient_dashboard import patient_dashboard
