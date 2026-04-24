@@ -1,9 +1,8 @@
 -- =========================================
 -- DATABASE SETUP
 -- =========================================
-DROP DATABASE IF EXISTS disease_progression_db;
-CREATE DATABASE disease_progression_db;
-USE disease_progression_db;
+CREATE DATABASE IF NOT EXISTS DiseaseProgressionDB;
+USE DiseaseProgressionDB;
 
 -- =========================================
 -- TABLE: Patient

@@ -1,173 +1,292 @@
-from fastapi import FastAPI
-import sqlite3
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+from datetime import date
+import mysql.connector
 
-app = FastAPI()
+app = FastAPI(title="Module 33 Disease Progression API")
 
-# -------------------------------
-# DATABASE CONNECTION
-# -------------------------------
+
 def get_connection():
-    return sqlite3.connect("module33.db")
-
-# -------------------------------
-# INITIALIZE DATABASE (DBMS RULE)
-# -------------------------------
-def init_db():
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    # Patient Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS Patient (
-        patient_id INTEGER PRIMARY KEY,
-        name TEXT NOT NULL,
-        age INTEGER CHECK(age > 0)
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="parulruchika",
+        database="DiseaseProgressionDB"
     )
-    """)
 
-    # Disease Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS Disease (
-        disease_id INTEGER PRIMARY KEY,
-        disease_name TEXT NOT NULL
-    )
-    """)
 
-    # Disease Progression Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS Progression (
-        stage_id INTEGER PRIMARY KEY,
-        patient_id INTEGER,
-        disease_id INTEGER,
-        stage TEXT,
-        date TEXT,
-        FOREIGN KEY (patient_id) REFERENCES Patient(patient_id),
-        FOREIGN KEY (disease_id) REFERENCES Disease(disease_id)
-    )
-    """)
+class PatientIn(BaseModel):
+    full_name: str
+    dob: date
+    gender: str
+    contact_info: Optional[str] = None
 
-    # Complication Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS Complication (
-        comp_id INTEGER PRIMARY KEY,
-        patient_id INTEGER,
-        description TEXT,
-        FOREIGN KEY (patient_id) REFERENCES Patient(patient_id)
-    )
-    """)
 
-    conn.commit()
-    conn.close()
+class DiseaseIn(BaseModel):
+    disease_name: str
+    category: Optional[str] = None
+    chronicity: Optional[str] = None
 
-init_db()
 
-# -------------------------------
-# API ROUTES (RESTFUL)
-# -------------------------------
+class StageIn(BaseModel):
+    disease_id: int
+    stage_name: str
+    stage_order: int
+    description: Optional[str] = None
+
+
+class ProgressionIn(BaseModel):
+    patient_id: int
+    disease_id: int
+    current_stage: int
+    diagnosis_date: date
+    severity_index: Optional[float] = 0.0
+    last_updated: Optional[date] = None
+
+
+class ComplicationIn(BaseModel):
+    progression_id: int
+    complication_name: str
+    severity: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class NaturalHistoryIn(BaseModel):
+    disease_id: int
+    typical_duration_days: Optional[int] = None
+    mortality_rate: Optional[float] = None
+    recurrence_rate: Optional[float] = None
+    notes: Optional[str] = None
+
 
 @app.get("/")
 def home():
-    return {"message": "Module 33 - Disease Progression API running"}
+    return {"message": "Module 33 backend is running with MySQL"}
 
-# -------------------------------
-# PATIENT APIs
-# -------------------------------
-
-@app.post("/patients")
-def add_patient(patient_id: int, name: str, age: int):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO Patient VALUES (?, ?, ?)", (patient_id, name, age))
-    conn.commit()
-    conn.close()
-    return {"message": "Patient added successfully"}
 
 @app.get("/patients")
 def get_patients():
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM Patient")
-    data = cursor.fetchall()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT * FROM Patient")
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
-    return {"patients": data}
+    return rows
 
-# -------------------------------
-# DISEASE APIs
-# -------------------------------
 
-@app.post("/diseases")
-def add_disease(disease_id: int, disease_name: str):
+@app.post("/patients")
+def add_patient(patient: PatientIn):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO Disease VALUES (?, ?)", (disease_id, disease_name))
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO Patient (FullName, DOB, Gender, ContactInfo)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (patient.full_name, patient.dob, patient.gender, patient.contact_info)
+    )
     conn.commit()
+    new_id = cur.lastrowid
+    cur.close()
     conn.close()
-    return {"message": "Disease added"}
+    return {"message": "Patient added", "PatientID": new_id}
+
 
 @app.get("/diseases")
 def get_diseases():
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM Disease")
-    data = cursor.fetchall()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT * FROM Disease")
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
-    return {"diseases": data}
+    return rows
 
-# -------------------------------
-# PROGRESSION APIs
-# -------------------------------
 
-@app.post("/progression")
-def add_progression(stage_id: int, patient_id: int, disease_id: int, stage: str, date: str):
+@app.post("/diseases")
+def add_disease(disease: DiseaseIn):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO Progression VALUES (?, ?, ?, ?, ?)",
-        (stage_id, patient_id, disease_id, stage, date)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO Disease (DiseaseName, Category, Chronicity)
+        VALUES (%s, %s, %s)
+        """,
+        (disease.disease_name, disease.category, disease.chronicity)
     )
     conn.commit()
+    new_id = cur.lastrowid
+    cur.close()
     conn.close()
-    return {"message": "Progression added"}
+    return {"message": "Disease added", "DiseaseID": new_id}
 
-@app.get("/progression")
-def get_progression():
+
+@app.get("/stages")
+def get_stages():
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT p.name, d.disease_name, pr.stage, pr.date
-        FROM Progression pr
-        JOIN Patient p ON pr.patient_id = p.patient_id
-        JOIN Disease d ON pr.disease_id = d.disease_id
-    """)
-    data = cursor.fetchall()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT * FROM Stage ORDER BY DiseaseID, StageOrder")
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
-    return {"progression": data}
+    return rows
 
-# -------------------------------
-# COMPLICATION APIs
-# -------------------------------
 
-@app.post("/complications")
-def add_complication(comp_id: int, patient_id: int, description: str):
+@app.post("/stages")
+def add_stage(stage: StageIn):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO Complication VALUES (?, ?, ?)",
-        (comp_id, patient_id, description)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO Stage (DiseaseID, StageName, StageOrder, Description)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (stage.disease_id, stage.stage_name, stage.stage_order, stage.description)
     )
     conn.commit()
+    new_id = cur.lastrowid
+    cur.close()
     conn.close()
-    return {"message": "Complication added"}
+    return {"message": "Stage added", "StageID": new_id}
+
+
+@app.get("/progressions")
+def get_progressions():
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute(
+        """
+        SELECT
+            dp.ProgressionID,
+            p.FullName,
+            d.DiseaseName,
+            s.StageName,
+            dp.DiagnosisDate,
+            dp.SeverityIndex,
+            dp.LastUpdated
+        FROM DiseaseProgression dp
+        JOIN Patient p ON dp.PatientID = p.PatientID
+        JOIN Disease d ON dp.DiseaseID = d.DiseaseID
+        LEFT JOIN Stage s ON dp.CurrentStage = s.StageID
+        ORDER BY dp.ProgressionID
+        """
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
+
+
+@app.post("/progressions")
+def add_progression(prog: ProgressionIn):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO DiseaseProgression
+        (PatientID, DiseaseID, CurrentStage, DiagnosisDate, SeverityIndex, LastUpdated)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        (
+            prog.patient_id,
+            prog.disease_id,
+            prog.current_stage,
+            prog.diagnosis_date,
+            prog.severity_index,
+            prog.last_updated or prog.diagnosis_date
+        )
+    )
+    conn.commit()
+    new_id = cur.lastrowid
+    cur.close()
+    conn.close()
+    return {"message": "Progression added", "ProgressionID": new_id}
+
 
 @app.get("/complications")
 def get_complications():
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT p.name, c.description
+    cur = conn.cursor(dictionary=True)
+    cur.execute(
+        """
+        SELECT
+            c.ComplicationID,
+            c.ProgressionID,
+            c.ComplicationName,
+            c.Severity,
+            c.Notes
         FROM Complication c
-        JOIN Patient p ON c.patient_id = p.patient_id
-    """)
-    data = cursor.fetchall()
+        ORDER BY c.ComplicationID
+        """
+    )
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
-    return {"complications": data}
+    return rows
+
+
+@app.post("/complications")
+def add_complication(comp: ComplicationIn):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO Complication (ProgressionID, ComplicationName, Severity, Notes)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (comp.progression_id, comp.complication_name, comp.severity, comp.notes)
+    )
+    conn.commit()
+    new_id = cur.lastrowid
+    cur.close()
+    conn.close()
+    return {"message": "Complication added", "ComplicationID": new_id}
+
+
+@app.get("/natural-history")
+def get_natural_history():
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT * FROM NaturalHistory")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
+
+
+@app.post("/natural-history")
+def add_natural_history(item: NaturalHistoryIn):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO NaturalHistory
+        (DiseaseID, TypicalDurationDays, MortalityRate, RecurrenceRate, Notes)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        (
+            item.disease_id,
+            item.typical_duration_days,
+            item.mortality_rate,
+            item.recurrence_rate,
+            item.notes
+        )
+    )
+    conn.commit()
+    new_id = cur.lastrowid
+    cur.close()
+    conn.close()
+    return {"message": "Natural history added", "NaturalHistoryID": new_id}
+
+
+@app.get("/summary")
+def get_summary():
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT * FROM vw_PatientDiseaseSummary")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
